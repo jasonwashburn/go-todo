@@ -15,6 +15,8 @@ type Todo struct {
 	Completed bool   `json:"completed"`
 }
 
+var repo TodoRepository
+
 type TodoRepository interface {
 	Create(todo Todo) (int, error)
 	Update(id int, todo Todo) error
@@ -78,18 +80,19 @@ func (r *InMemoryTodoRepository) Delete(id int) error {
 }
 
 func main() {
+	repo = NewInMemoryRepository()
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, World!"))
 	})
 	r.Get("/todos", getTodosHandler)
+	r.Post("/todos", postTodosHandler)
 
 	http.ListenAndServe(":8080", r)
 }
 
 func getTodosHandler(w http.ResponseWriter, r *http.Request) {
-	repo := NewInMemoryRepository()
 	todos, err := repo.GetAll()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -97,4 +100,24 @@ func getTodosHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(todos)
+}
+
+func postTodosHandler(w http.ResponseWriter, r *http.Request) {
+	var todo Todo
+	err := json.NewDecoder(r.Body).Decode(&todo)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	id, err := repo.Create(todo)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	newTodo, err := repo.Get(id)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	json.NewEncoder(w).Encode(newTodo)
 }
